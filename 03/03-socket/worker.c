@@ -20,10 +20,8 @@ int count_alpha(const char* filename, int start, int end) {
     char c;
     for(int i = 0; i < filesz; i++) {
 	if(isalpha((c = tolower(buffer[i])))){
-	    printf("c is: %c", c);
 	    count_array[c - 'a'] += 1;
 	}
-
     }
     return 0;
 }

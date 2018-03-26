@@ -1,2 +1,2 @@
-gcc -g -o testClient testClient.c 
-gcc -g -o testServer testServer.c -l pthread
+gcc -g -o worker worker.c 
+gcc -g -o master master.c -l pthread
