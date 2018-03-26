@@ -6,6 +6,10 @@
 #include <unistd.h>
 #include <stdlib.h>
 
+int sock;
+char filename[128] = "";
+struct sockaddr_in server;
+
 int count_array[26] = {0};
 
 int count_alpha(const char* filename, int start, int end) {
@@ -25,25 +29,31 @@ int count_alpha(const char* filename, int start, int end) {
     }
     return 0;
 }
- 
-int main(int argc, char *argv[])
-{
-    int sock;
-    struct sockaddr_in server;
-    char server_reply[128] = "";
-    char filename[128] = "";
-     
-    //Create socket
+
+int setup_client() {
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock == -1) {
         printf("Could not create socket\n");
+	return -1;
     }
     printf("Socket created\n");
      
     server.sin_addr.s_addr = inet_addr("10.0.0.1");
     server.sin_family = AF_INET;
     server.sin_port = htons( 8888 );
- 
+    return 0;
+}
+
+int main(int argc, char *argv[])
+{
+    char server_reply[128] = "";
+
+     
+    //Create socket
+    if(setup_client() != 0) {
+	printf("failed to setup client\n");
+	return -1;
+    }
     //Connect to remote server
     if (connect(sock, (struct sockaddr *)&server, sizeof(server)) < 0) {
         perror("connect failed. Error\n");

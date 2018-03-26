@@ -15,6 +15,39 @@ int h2[26];
 int h3[26];
 int result[26] = {0};
 
+int setup_server_helper() {
+    // Create socket
+    if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        perror("Could not create socket\n");
+		return -1;
+    }
+    printf("Socket created\n");
+     
+    // Prepare the sockaddr_in structure
+    server.sin_family = AF_INET;
+    server.sin_addr.s_addr = INADDR_ANY;
+    server.sin_port = htons(8888);
+    return 0;
+}
+
+int setup_server() {
+    setup_server_helper();
+    
+    // Bind
+    if (bind(s,(struct sockaddr *)&server, sizeof(server)) < 0) {
+        perror("bind failed. Error\n");
+        return -1;
+    }
+    printf("bind done\n");
+     
+    // Listen
+    listen(s, 3);
+
+    // Accept and incoming connection
+    printf("Waiting for incoming connections...\n\n");
+    return 0;
+}
+
 int novel_size(const char* name) {
     FILE *fd = fopen(name, "r");
     if(fd == NULL)
@@ -142,18 +175,6 @@ void* handle(void* in) {
     struct sockaddr_in client;
 
     accept_and_check(&cs, &client);
-//    char* greet = "Hello, this is a reply from server";
-//	
-//    c = sizeof(struct sockaddr_in);
-//    if ((cs = accept(s, (struct sockaddr *)&client, (socklen_t *)&c)) < 0) {
-//	perror("accept failed");
-//	return NULL;
-//    }
-//    printf("Connection accepted\n");
-//    
-//    printf("Client address is %s\n", inet_ntoa(client.sin_addr));
-//    // Greeting
-//    write(cs, greet, strlen(greet));
 
     // dispatch some work
     puts("dispatching...");
@@ -206,39 +227,6 @@ void show_results() {
     for(int i = 0; i < 26; i++) {
 	printf("%c: %d\n", 'a' + i, h2[i] + h3[i]);
     }    
-}
-
-int setup_server_helper() {
-    // Create socket
-    if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        perror("Could not create socket\n");
-		return -1;
-    }
-    printf("Socket created\n");
-     
-    // Prepare the sockaddr_in structure
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons(8888);
-    return 0;
-}
-
-int setup_server() {
-    setup_server_helper();
-    
-    // Bind
-    if (bind(s,(struct sockaddr *)&server, sizeof(server)) < 0) {
-        perror("bind failed. Error\n");
-        return -1;
-    }
-    printf("bind done\n");
-     
-    // Listen
-    listen(s, 3);
-
-    // Accept and incoming connection
-    printf("Waiting for incoming connections...\n\n");
-    return 0;
 }
 
 int main(int argc, char *argv[]) {
