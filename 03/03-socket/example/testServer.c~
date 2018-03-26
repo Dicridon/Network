@@ -1,0 +1,35 @@
+#include <stdio.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <pthread.h>
+
+int main() {
+    int s;
+        // Create socket
+    if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        perror("Could not create socket");
+		return -1;
+    }
+    printf("Socket created");
+     
+    // Prepare the sockaddr_in structure
+    server.sin_family = AF_INET;
+    server.sin_addr.s_addr = INADDR_ANY;
+    server.sin_port = htons(8888);
+     
+    // Bind
+    if (bind(s,(struct sockaddr *)&server, sizeof(server)) < 0) {
+        perror("bind failed. Error");
+        return -1;
+    }
+    printf("bind done");
+     
+    // Listen
+    listen(s, 3);
+     
+    // Accept and incoming connection
+    printf("Waiting for incoming connections...");
+
+}

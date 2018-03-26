@@ -1,0 +1,63 @@
+#include <stdio.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <pthread.h>
+
+int s;
+struct sockaddr_in server;
+
+void* handle(void* in) {
+    int c, cs;
+    struct sockaddr_in client;
+    
+    c = sizeof(struct sockaddr_in);
+    if ((cs = accept(s, (struct sockaddr *)&client, (socklen_t *)&c)) < 0) {
+        perror("accept failed");
+        return NULL;
+    }
+    printf("Connection accepted\n");
+
+    printf("Client address is %u\n", ntohl(client.sin_addr.s_addr));
+    printf("Client address is %s", inet_ntoa(client.sin_addr));
+    return in;
+}
+
+int main() {
+
+    // Create socket
+    if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        perror("Could not create socket\n");
+		return -1;
+    }
+    printf("Socket created\n");
+     
+    // Prepare the sockaddr_in structure
+    server.sin_family = AF_INET;
+    server.sin_addr.s_addr = INADDR_ANY;
+    server.sin_port = htons(8888);
+     
+    // Bind
+    if (bind(s,(struct sockaddr *)&server, sizeof(server)) < 0) {
+        perror("bind failed. Error\n");
+        return -1;
+    }
+    printf("bind done\n");
+     
+    // Listen
+    listen(s, 3);
+     
+    // Accept and incoming connection
+    printf("Waiting for incoming connections...\n");
+
+    pthread_t p1;
+    pthread_t p2;
+
+    pthread_create(&p1, NULL, handle, NULL);
+    pthread_create(&p2, NULL, handle, NULL);
+
+    pthread_join(p1, NULL);
+    pthread_join(p2, NULL);
+    return 0;
+}
