@@ -117,7 +117,7 @@ void dispatch(int cs, struct sockaddr_in *client, char *in) {
     dispatch_partition(cs, client, in);
 }
 
-int comfirm(int cs, struct sockaddr_in *client) {
+int confirm(int cs, struct sockaddr_in *client) {
     char conf[128];
     if(recv(cs, conf, 128, 0) < 0){
 	printf("Confirmation errore\n");
@@ -182,7 +182,7 @@ void* handle(void* in) {
 
     puts("comfirming...");
     // receiving confirmation of start of counting
-    if(comfirm(cs, &client))
+    if(confirm(cs, &client))
 	return NULL;
 
     puts("receiving...");
