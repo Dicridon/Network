@@ -11,31 +11,30 @@ def clearIP(n):
     for iface in n.intfList():
         n.cmd('ifconfig %s 0.0.0.0' % (iface))
 
-class BroadcastTopo(Topo):
+class SwitchingTopo(Topo):
     def build(self):
         h1 = self.addHost('h1')
         h2 = self.addHost('h2')
         h3 = self.addHost('h3')
-        b1 = self.addHost('b1')
+        s1 = self.addHost('s1')
 
-        self.addLink(h1, b1, bw=20)
-        self.addLink(h2, b1, bw=10)
-        self.addLink(h3, b1, bw=10)
+        self.addLink(h1, s1, bw=20)
+        self.addLink(h2, s1, bw=10)
+        self.addLink(h3, s1, bw=10)
 
 if __name__ == '__main__':
-    topo = BroadcastTopo()
+    topo = SwitchingTopo()
     net = Mininet(topo = topo, link = TCLink, controller = None) 
 
-    h1, h2, h3, b1 = net.get('h1', 'h2', 'h3', 'b1')
-    h1.cmd('ifconfig h1-eth0 10.0.0.1/8')
-    h2.cmd('ifconfig h2-eth0 10.0.0.2/8')
-    h3.cmd('ifconfig h3-eth0 10.0.0.3/8')
-    clearIP(b1)
+    h1, h2, h3, s1 = net.get('h1', 'h2', 'h3', 's1')
+    h1.cmd('ifconfig h1-eth0 10.0.0.1/24')
+    h2.cmd('ifconfig h2-eth0 10.0.0.2/24')
+    h3.cmd('ifconfig h3-eth0 10.0.0.3/24')
+    clearIP(s1)
 
     h1.cmd('./disable_offloading.sh')
     h2.cmd('./disable_offloading.sh')
     h3.cmd('./disable_offloading.sh')
-    b1.cmd('./hub')
 
     net.start()
     CLI(net)

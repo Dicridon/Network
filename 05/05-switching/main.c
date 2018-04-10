@@ -3,6 +3,9 @@
 #include "ether.h"
 #include "log.h"
 
+#include "mac.h"
+#include "packet.h"
+
 #include <sys/types.h>
 #include <ifaddrs.h>
 
@@ -15,44 +18,30 @@ static iface_info_t *fd_to_iface(int fd)
 	if (iface->fd == fd)
 	    return iface;
     }
-
     log(ERROR, "Could not find the desired interface according to fd %d", fd);
     return NULL;
 }
 
-void iface_send_packet(iface_info_t *iface, const char *packet, int len)
-{
-    struct sockaddr_ll addr;
-    memset(&addr, 0, sizeof(struct sockaddr_ll));
-    addr.sll_family = AF_PACKET;
-    addr.sll_ifindex = iface->index;
-    addr.sll_halen = ETH_ALEN;
-    addr.sll_protocol = htons(ETH_P_ARP);
-    struct ether_header *eh = (struct ether_header *)packet;
-    memcpy(addr.sll_addr, eh->ether_dhost, ETH_ALEN);
-
-    if (sendto(iface->fd, packet, len, 0, (const struct sockaddr *)&addr,
-	       sizeof(struct sockaddr_ll)) < 0) {
-	perror("Send raw packet failed");
-    }
-}
-
-void broadcast_packet(iface_info_t *iface, const char *packet, int len)
-{
-    // TODO: broadcast packet
-    iface_info_t *iface_walk = NULL;
-    list_for_each_entry(iface_walk, &instance->iface_list, list) {
-	if(iface_walk != iface) {
-	    iface_send_packet(iface_walk, packet, len);
-	}
-    }
-    
-//    fprintf(stdout, "TODO: broadcast packet here.\n");
-}
-
 void handle_packet(iface_info_t *iface, char *packet, int len)
 {
-    broadcast_packet(iface, packet, len);
+    struct ether_header *eh = (struct ether_header *)packet;
+//    log(DEBUG, "the dst mac address is " ETHER_STRING ".\n", ETHER_FMT(eh->ether_dhost));
+//    log(DEBUG, "the src mac address is " ETHER_STRING ".\n", ETHER_FMT(eh->ether_shost));
+
+    // DONE: implement the packet forwarding process here
+//    fprintf(stdout, "Looking for destination\n");
+    iface_info_t *dest_iface = lookup_port(eh->ether_dhost);
+//    fprintf(stdout, "Looking for source\n");
+    iface_info_t *src_iface = lookup_port(eh->ether_shost);
+    if (dest_iface) {
+	iface_send_packet(dest_iface, packet, len);
+    } else {
+	broadcast_packet(iface, packet, len);
+    }
+
+    if (!src_iface) {
+	insert_mac_port(eh->ether_shost, iface);
+    }
 }
 
 int open_device(const char *dname)
@@ -86,7 +75,7 @@ int open_device(const char *dname)
 	return -1;
     }
 
-    // We could still capture all the packets even if not in promisc mode.
+    // It seems that we could capture all the packets without promisc mode.
 #if 0
     struct packet_mreq mr;
     bzero(&mr, sizeof(mr));
@@ -118,7 +107,7 @@ int read_iface_info(iface_info_t *iface)
     ioctl(s, SIOCGIFHWADDR, &ifr);
     memcpy(&iface->mac, ifr.ifr_hwaddr.sa_data, sizeof(iface->mac));
 
-    // As a broadcast (hub), its interfaces have no IP address.
+    // As a switch, its interfaces have no IP address.
 #if 0
     struct in_addr ip, mask;
     // get ip address
@@ -204,6 +193,8 @@ void init_ustack()
     init_list_head(&instance->iface_list);
 
     init_all_ifaces();
+
+    init_mac_hash_table();
 }
 
 void ustack_run()
@@ -221,7 +212,7 @@ void ustack_run()
 	}
 	else if (ready == 0)
 	    continue;
-
+		
 	for (int i = 0; i < instance->nifs; i++) {
 	    if (instance->fds[i].revents & POLLIN) {
 		len = recvfrom(instance->fds[i].fd, buf, ETH_FRAME_LEN, 0, \
