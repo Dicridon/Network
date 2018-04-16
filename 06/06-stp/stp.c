@@ -175,63 +175,77 @@ static bool better_port(stp_port_t *p1, stp_port_t *p2) {
         return get_port_id(p1->designated_port) < get_port_id(p2->designated_port);
 }
 
+static void hton_config(struct stp_config *dest, struct stp_config *src) {
+    memcpy(dest, src, sizeof(struct stp_config));
+    dest->root_id = htonll(dest->root_id);
+    dest->switch_id = htonll(dest->switch_id);
+    dest->port_id = htons(dest->port_id);
+    dest->root_path_cost = htonl(dest->root_path_cost);
+}
+
+static void undesignate(stp_port_t *p, struct stp_config *config) {
+    p->designated_cost = config->root_path_cost;
+    p->designated_root = config->root_id;
+    p->designated_port = config->port_id;
+    p->designated_switch = config->switch_id;
+}
+
+static stp_port_t * find_root_port(stp_t *stp) {
+    stp_port_t *root_port = NULL;
+    for (int i = 0; i < stp->nports; i++) {
+        if (!stp_port_is_designated(&stp->ports[i])) {
+            root_port = &stp->ports[i];
+            break;
+        }
+    }
+    for (int i = 0; i < stp->nports; i++) {
+        if (better_port(&stp->ports[i], root_port))
+            root_port = &stp->ports[i];
+    }
+    return root_port;
+}
+
+static void update_node_state(stp_t *stp) {
+    stp_port_t *root_port = find_root_port(stp);
+    if (root_port) {
+        stp->designated_root = root_port->designated_root;
+        stp->root_port = root_port;;;
+        stp->root_path_cost = root_port->designated_cost + root_port->path_cost;
+    } else {
+        stp->designated_root = stp->switch_id;
+        stp->root_path_cost = 0;
+    }
+}
+
+static void update_port_config(stp_t *stp, stp_port_t *p) {
+    for (int i = 0; i < stp->nports; i++) {
+        if (stp_port_is_designated(&stp->ports[i])) {
+            stp->ports[i].designated_root = stp->designated_root;
+            stp->ports[i].designated_cost = stp->root_path_cost;
+        } else {
+            if (can_be_designated(&stp->ports[i], stp)) {
+                p->designated_root = stp->designated_root;
+                p->designated_cost = stp->root_path_cost;
+                p->designated_switch = stp->switch_id;
+                p->designated_port = p->port_id;
+            }
+        }
+    }   
+}
+
 static void stp_handle_config_packet(stp_t *stp, stp_port_t *p,
                                      struct stp_config *config)
 {
     bool is_root_switch = stp_is_root_switch(stp);
     struct stp_config temp_config;
-    memcpy(&temp_config, config, sizeof(struct stp_config));
-    temp_config.root_id = htonll(temp_config.root_id);
-    temp_config.switch_id = htonll(temp_config.switch_id);
-    temp_config.port_id = htons(temp_config.port_id);
-    temp_config.root_path_cost = htonl(temp_config.root_path_cost);
+    hton_config(&temp_config, config);
 
     if (priority_check(p, &temp_config)) {
         stp_port_send_config(p);
     } else {
-        // undesignate
-        p->designated_cost = temp_config.root_path_cost;
-        p->designated_root = temp_config.root_id;
-        p->designated_port = temp_config.port_id;
-        p->designated_switch = temp_config.switch_id;
-
-        // looking for a root port
-        stp_port_t *root_port = NULL;
-        for (int i = 0; i < stp->nports; i++) {
-            if (!stp_port_is_designated(&stp->ports[i])) {
-                root_port = &stp->ports[i];
-                break;
-            }
-        }
-        for (int i = 0; i < stp->nports; i++) {
-            if (better_port(&stp->ports[i], root_port))
-                root_port = &stp->ports[i];
-        }
-
-        // udpate node state
-        if (root_port) {
-            stp->designated_root = root_port->designated_root;
-            stp->root_port = root_port;
-            stp->root_path_cost = root_port->designated_cost + root_port->path_cost;
-        } else {
-            stp->designated_root = stp->switch_id;
-            stp->root_path_cost = 0;
-        }
-
-        // update port config
-        for (int i = 0; i < stp->nports; i++) {
-            if (stp_port_is_designated(&stp->ports[i])) {
-                stp->ports[i].designated_root = stp->designated_root;
-                stp->ports[i].designated_cost = stp->root_path_cost;
-            } else {
-                if (can_be_designated(&stp->ports[i], stp)) {
-                    p->designated_root = stp->designated_root;
-                    p->designated_cost = stp->root_path_cost;
-                    p->designated_switch = stp->switch_id;
-                    p->designated_port = p->port_id;
-                }
-            }
-        }
+        undesignate(p, &temp_config);
+        update_node_state(stp);
+        update_port_config(stp, p);
         if (is_root_switch)
             stp_stop_timer(&stp->hello_timer);
         stp_send_config(stp);
