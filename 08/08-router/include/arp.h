@@ -16,10 +16,10 @@ struct ether_arp {
     u8	arp_hln;		/* Length of hardware address.  */
     u8	arp_pln;		/* Length of protocol address.  */
     u16 arp_op;			/* ARP opcode (command).  */
-	u8	arp_sha[ETH_ALEN];	/* sender hardware address */
-	u32	arp_spa;		/* sender protocol address */
-	u8	arp_tha[ETH_ALEN];	/* target hardware address */
-	u32	arp_tpa;		/* target protocol address */
+    u8	arp_sha[ETH_ALEN];	/* sender hardware address */
+    u32	arp_spa;		/* sender protocol address */
+    u8	arp_tha[ETH_ALEN];	/* target hardware address */
+    u32	arp_tpa;		/* target protocol address */
 } __attribute__ ((packed));
 
 void handle_arp_packet(iface_info_t *info, char *pkt, int len);
