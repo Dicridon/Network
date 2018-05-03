@@ -18,10 +18,10 @@ void arp_send_request(iface_info_t *iface, u32 dst_ip)
     struct ether_arp arp;
     bzero(&arp, sizeof(struct ether_arp));
     arp.arp_hrd = htons(0x01);
-    arp.arp_pro = htons(0x0800);
+    arp.arp_pro = htons(ETH_P_IP);
     arp.arp_hln = 6;
     arp.arp_pln = 4;
-    arp.arp_op = htonl(ARPOP_REQUEST);
+    arp.arp_op = htons(ARPOP_REQUEST);
     memcpy(arp.arp_sha, iface->mac, ETH_ALEN);
     arp.arp_spa = htonl(iface->ip);
     arp.arp_tpa = htonl(dst_ip);
@@ -74,20 +74,14 @@ void handle_arp_packet(iface_info_t *iface, char *packet, int len)
         if (target_ip == iface->ip) {
             arp_send_reply(iface, arp);
             arpcache_insert(source_ip, arp->arp_sha);
-        } else {
-            //  iface_send_packet(iface, packet, len);
-            iface_send_packet_by_arp(iface, target_ip, packet, len);
-        }
+        } 
         break;
     case ARPOP_REPLY:
         if (target_ip == iface->ip) {
             arpcache_insert(source_ip, arp->arp_sha);
-        } else {
-            // iface_send_packet(iface, packet, len);
-            iface_send_packet_by_arp(iface, target_ip, packet, len);
         }
     default:
-        fprintf(stdout, "NOT A ARP PACKET in handle_arp_packet\n");
+        fprintf(stdout, "NOT A ARP REQUEST OR REPLY in handle_arp_packet\n");
     }
 
     //fprintf(stderr, "DONE: process arp packet: arp request & arp reply.\n");

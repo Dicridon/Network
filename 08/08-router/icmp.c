@@ -60,6 +60,7 @@ void icmp_send_packet(const char *in_pkt, int len, u8 type, u8 code)
                in_pkt + ETHER_HDR_SIZE + IP_HDR_SIZE(in_ip_hdr) + 4,
                len - ETHER_HDR_SIZE - IP_HDR_SIZE(in_ip_hdr) - 4);
     }
-    icmp->checksum = icmp_checksum(icmp, ICMP_HDR_SIZE);
+    icmp->checksum =
+        icmp_checksum(icmp, tot_size-ETHER_HDR_SIZE-IP_BASE_HDR_SIZE);
     ip_send_packet(out_pkt, tot_size);
 }

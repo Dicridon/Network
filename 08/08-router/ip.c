@@ -64,13 +64,9 @@ void ip_forward_packet(u32 ip_dst, char *packet, int len)
 
     rt_entry_t *entry = longest_prefix_match(ip_dst);
     if (!entry) {
-        icmp_send_packet(packet, len, ICMP_DEST_UNREACH, ICMP_HOST_UNREACH);
+        icmp_send_packet(packet, len, ICMP_DEST_UNREACH, ICMP_NET_UNREACH);
         return ;
     }
-
-    u32 next_hop = entry->gw;
-    if (!next_hop)
-        next_hop = ip_dst;
 
     struct ether_header *eh = (struct ether_header *)packet;
     eh->ether_type = ntohs(ETH_P_IP);
@@ -78,7 +74,7 @@ void ip_forward_packet(u32 ip_dst, char *packet, int len)
 
     ip->checksum = ip_checksum(ip);
 
-    iface_send_packet_by_arp(entry->iface, next_hop, packet, len);   
+    ip_send_packet(packet, len);
     // fprintf(stderr, "DONE: forward ip packet.\n");
 }
 
