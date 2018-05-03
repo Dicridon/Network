@@ -52,7 +52,7 @@ void icmp_send_packet(const char *in_pkt, int len, u8 type, u8 code)
 
     // icmp rest
     if (type != ICMP_ECHOREPLY) {
-        memcpy(((char*)icmp + ICMP_HDR_SIZE),
+        memcpy(((char*)icmp + ICMP_HDR_SIZE),   // the extra 4 bytes are included
                (char*)in_ip_hdr,
                IP_HDR_SIZE(in_ip_hdr) + 8);
     } else {

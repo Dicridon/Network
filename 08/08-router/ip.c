@@ -44,7 +44,6 @@ rt_entry_t *longest_prefix_match(u32 dst)
         }
     }
     
-    // fprintf(stderr, "DONE: longest prefix match for the packet.\n");
     return return_entry;
 }
 
@@ -54,7 +53,6 @@ rt_entry_t *longest_prefix_match(u32 dst)
 // iface_send_packet_by_arp
 void ip_forward_packet(u32 ip_dst, char *packet, int len)
 {
-    // DONE
     struct iphdr *ip = packet_to_ip_hdr(packet);
     if (!ip->ttl) {
         icmp_send_packet(packet, len, ICMP_DEST_UNREACH, ICMP_EXC_TTL);
@@ -75,7 +73,6 @@ void ip_forward_packet(u32 ip_dst, char *packet, int len)
     ip->checksum = ip_checksum(ip);
 
     ip_send_packet(packet, len);
-    // fprintf(stderr, "DONE: forward ip packet.\n");
 }
 
 // handle ip packet
@@ -85,7 +82,6 @@ void ip_forward_packet(u32 ip_dst, char *packet, int len)
 // packet.
 void handle_ip_packet(iface_info_t *iface, char *packet, int len)
 {
-    // DONE
     struct iphdr *ip = packet_to_ip_hdr(packet);
     u32 dst = ntohl(ip->daddr);
 
@@ -103,8 +99,6 @@ void handle_ip_packet(iface_info_t *iface, char *packet, int len)
         }
     }
     ip_forward_packet(dst, packet, len);
-
-    // fprintf(stderr, "DONE: handle ip packet: echo the ping packet, and forward other IP packets.\n");
 }
 
 // send IP packet

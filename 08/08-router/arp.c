@@ -33,7 +33,6 @@ void arp_send_request(iface_info_t *iface, u32 dst_ip)
     eh->ether_type = htons(ETH_P_ARP);
     memcpy(packet+2*ETH_ALEN+2, &arp, sizeof(struct ether_arp));
     iface_send_packet(iface, packet, packet_size);
-    //fprintf(stderr, "DONE: send arp request when lookup failed in arpcache.\n");
 }
 
 // send an arp reply packet: encapsulate an arp reply packet, send it out
@@ -59,7 +58,6 @@ void arp_send_reply(iface_info_t *iface, struct ether_arp *req_hdr)
     eh->ether_type = htons(ETH_P_ARP);
     memcpy(packet+2*ETH_ALEN+2, &arp, sizeof(struct ether_arp));
     iface_send_packet(iface, packet, packet_size);
-    //fprintf(stderr, "DONE: send arp reply when receiving arp request.\n");
 }
 
 void handle_arp_packet(iface_info_t *iface, char *packet, int len)
@@ -83,8 +81,6 @@ void handle_arp_packet(iface_info_t *iface, char *packet, int len)
     default:
         fprintf(stdout, "NOT A ARP REQUEST OR REPLY in handle_arp_packet\n");
     }
-
-    //fprintf(stderr, "DONE: process arp packet: arp request & arp reply.\n");
 }
 
 // send (IP) packet through arpcache lookup 
