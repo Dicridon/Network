@@ -54,11 +54,12 @@ rt_entry_t *longest_prefix_match(u32 dst)
 void ip_forward_packet(u32 ip_dst, char *packet, int len)
 {
     struct iphdr *ip = packet_to_ip_hdr(packet);
+    ip->ttl--;
     if (!ip->ttl) {
-        icmp_send_packet(packet, len, ICMP_DEST_UNREACH, ICMP_EXC_TTL);
+        icmp_send_packet(packet, len, ICMP_TIME_EXCEEDED, ICMP_EXC_TTL);
         return ;
-    } else
-        ip->ttl--;
+    }
+ 
 
     rt_entry_t *entry = longest_prefix_match(ip_dst);
     if (!entry) {
