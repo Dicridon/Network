@@ -54,6 +54,8 @@ static bool isLeaf(RTableTree *tree) {
 }
 
 static void matchIPHelper(RTableTree *tree, uint32_t IP, PortID *portPtr){
+    if (!tree)
+        return;
     if (tree->nodeKind == Matched)
         *portPtr = tree->port;
     
@@ -71,4 +73,13 @@ PortID matchIP(RTableTree *tree, uint32_t IP) {
 }
 
 // recycle all space used by the tree
-void destroyTree(RTableTree * tree);
+void destroyTree(RTableTree * tree) {
+    if (tree->children[LEFT] != NULL)
+        destroyTree(tree->children[LEFT]);
+
+    if (tree->children[RIGHT] != NULL)
+        destroyTree(tree->children[RIGHT]);
+
+    free(tree);
+    tree = NULL;
+}

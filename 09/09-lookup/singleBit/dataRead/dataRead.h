@@ -1,7 +1,7 @@
 #ifndef __DATA_READ__
 #define __DATA_READ__
 
-#define __DEBUG__
+// #define __DEBUG__
 
 #include <stdlib.h>
 #include <string.h>
@@ -36,6 +36,10 @@ int getLine(uint32_t *IP, int *prefixLength, PortID *port) {
           ((IP1 & 0x000000ff) << 8) |
           ((IP0 & 0x000000ff));
     return 0;
+}
+
+void rewindRTableFile() {
+    fseek(RTableFile, 0, SEEK_SET);
 }
 
 void closeRTableFile() {

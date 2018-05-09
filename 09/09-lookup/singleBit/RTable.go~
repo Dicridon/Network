@@ -1,0 +1,5 @@
+package ratbleTrie
+
+type Node struct {
+	nodeKind string
+}
