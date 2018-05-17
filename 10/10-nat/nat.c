@@ -57,7 +57,7 @@ static int assign_external_port() {
     print_log("Enter assign_external_port\n");
     for (int i = 0; i < 65536; i++) {
         if (nat.assigned_ports[i] == 0)
-            return i;
+            return i + 1;
     }
     fprintf(stdout, "Not enough ports\n");
     print_log("Leave assign_external_port\n");
@@ -72,8 +72,9 @@ static void to_public(iface_info_t *iface, char *packet, int len) {
     u32 public_daddr = ntohl(ip->daddr);
     u32 private_sport = ntohs(tcp->sport);
     int hash_index = hash8((char*)&public_daddr, 4);
-
+    struct nat_mapping * mapping = NULL;
     if (list_empty(&nat.nat_mapping_list[hash_index])) {
+        pthread_mutex_lock(&nat.lock);
         struct nat_mapping *new_mapping =
             (struct nat_mapping *) malloc(sizeof(struct nat_mapping));
         new_mapping->internal_ip = private_saddr;
@@ -83,15 +84,32 @@ static void to_public(iface_info_t *iface, char *packet, int len) {
         new_mapping->update_time = time(NULL);
         memset(&new_mapping->conn, 0, sizeof(struct nat_connection));
         list_add_tail(&new_mapping->list, &nat.nat_mapping_list[hash_index]);
-    } else {
-        struct nat_mapping * mapping =
-            (struct nat_mapping *)&nat.nat_mapping_list[hash_index];
-        mapping->update_time = time(NULL);
+        pthread_mutex_unlock(&nat.lock);
+    }
+    
+//     struct nat_mapping * mapping =
+//         (struct nat_mapping *)nat.nat_mapping_list[hash_index].next;
+//     mapping->update_time = time(NULL);
+    struct list_head *p = nat.nat_mapping_list[hash_index].next;
+    int found = 0;
+    while (p != &nat.nat_mapping_list[hash_index]) {
+        mapping = (struct nat_mapping *)p;
+        if (mapping->internal_ip == private_saddr &&
+            mapping->internal_port == private_sport){
+            found = 1;
+            break;
+        }
+        p = p->next;
     }
 
+    if (!found) {
+        print_log("No translation entry found\n");
+        exit(-1);
+    }
+
+    pthread_mutex_unlock(&nat.lock);
     ip->saddr = htonl(nat.external_iface->ip);
-    tcp->sport =
-        htons(((struct nat_mapping *)&nat.nat_mapping_list[hash_index])->external_port);
+    tcp->sport = htons(mapping->external_port);
     ip->checksum = ip_checksum(ip);
     tcp->checksum = tcp_checksum(ip, tcp);
     ip_send_packet(packet, len);
@@ -103,6 +121,8 @@ static void to_private(iface_info_t *iface, char *packet, int len) {
     struct iphdr *ip = packet_to_ip_hdr(packet);
     struct tcphdr *tcp = packet_to_tcp_hdr(packet);
     u32 public_saddr = ntohl(ip->saddr);
+    u32 private_daddr = ntohl(ip->daddr);
+    u16 private_dport = ntohs(tcp->dport);
     int hash_index = hash8((char*)&public_saddr, 4);
 
     if (list_empty(&nat.nat_mapping_list[hash_index])) {
@@ -110,10 +130,30 @@ static void to_private(iface_info_t *iface, char *packet, int len) {
         return;
     }
 
-    struct nat_mapping * mapping =
-        (struct nat_mapping *)(nat.nat_mapping_list[hash_index].next);
+    struct nat_mapping * mapping = NULL;
     
+    struct list_head *p = nat.nat_mapping_list[hash_index].next;
+    int found = 0;
+    while (p != &nat.nat_mapping_list[hash_index]) {
+        mapping = (struct nat_mapping *)p;
+        if (mapping->external_ip == private_daddr &&
+            mapping->external_port == private_dport){
+            found = 1;
+            break;
+        }
+        p = p->next;
+    }
+
+    if (!found) {
+        print_log("No translation entry found\n");
+        exit(-1);
+    }
+
+    
+    pthread_mutex_lock(&nat.lock);
     mapping->update_time = time(NULL);
+    pthread_mutex_unlock(&nat.lock);
+    
     ip->daddr = htonl(mapping->internal_ip);
     tcp->dport = htons(mapping->internal_port);
     ip->checksum = ip_checksum(ip);
@@ -166,7 +206,21 @@ void *nat_timeout()
     print_log("Enter nat_timeout\n");
     print_rtable();        
     while (1) {
-//        fprintf(stdout, "TODO: sweep finished flows periodically.\n");
+        pthread_mutex_lock(&nat.lock);
+        for (int i = 0; i < 256; i++) {
+            struct nat_mapping *mapping;
+            list_for_each_entry(mapping, &nat.nat_mapping_list[i], list) {
+                if ((mapping->conn.external_ack &&
+                    mapping->conn.external_fin &&
+                    mapping->conn.internal_ack &&
+                    mapping->conn.internal_fin) ||
+                    time(NULL) - mapping->update_time >= 60) {
+                    list_delete_entry(&mapping->list);
+                    free(mapping);
+                }
+            }
+        }
+        pthread_mutex_unlock(&nat.lock);
         sleep(1);
     }
     print_log("Leave nat_timeout\n");
