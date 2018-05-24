@@ -223,7 +223,6 @@ static void generate_mospf_hello(char *packet, iface_info_t *iface, int len) {
     init_mospf_hello_ip(packet, iface);
     init_mospf_hello_mospfhdr(packet);
     init_mospf_hello_hello(packet, iface);
-//    fprintf(stdout, "generation done\n");
 }
 
 static void init_mospf_lsu(char *packet, iface_info_t *iface, int nbrs) {
@@ -339,7 +338,6 @@ void *sending_mospf_hello_thread(void *param)
 #ifdef __DEBUG__
     track_function(LEAVE);
 #endif
-    // fprintf(stdout, "DONE: send mOSPF Hello message periodically.\n");
     return NULL;
 }
 
@@ -361,6 +359,7 @@ void *checking_nbr_thread(void *param)
                 list_for_each_entry_safe(db, dq, &mospf_db, list) {
                     if (db->rid == nbr->nbr_id) {
                         list_delete_entry(&db->list);
+                        free(db->array);
                         free(db);
                         break;
                     }
@@ -371,7 +370,6 @@ void *checking_nbr_thread(void *param)
             }
         }
     }
-    // TODO: remember to remove entries in mospf_db, use rid;
 
     pthread_mutex_unlock(&mospf_lock);
     if (removed) {
@@ -543,10 +541,11 @@ static void forward_lsu(iface_info_t *iface, char *packet, int len) {
         MALLOC_FAILED(pkt);
         memcpy(pkt, packet, len);
         ip = packet_to_ip_hdr(pkt);
-        /* fprintf(stdout, "forwarding from iface %p\n", iface); */
-        /* inspect_forwarding(ntohl(ip->saddr), ntohl(ip->daddr), nbr->nbr_ip); */
-        if (ntohl(ip->saddr) == nbr->nbr_ip)
-            continue;
+#ifdef __DEBUG_HELPERS__
+        inspect_forwarding(ntohl(ip->saddr), ntohl(ip->daddr), nbr->nbr_ip);
+#endif
+        //if (ntohl(ip->saddr) == nbr->nbr_ip)
+        //    continue;
         hdr = (struct mospf_hdr *)((char*)ip + IP_HDR_SIZE(ip));
         ip->daddr = htonl(nbr->nbr_ip);
         ip->checksum = ip_checksum(ip);
@@ -577,11 +576,13 @@ void handle_mospf_lsu(iface_info_t *iface, char *packet, int len)
     iface_info_t *walk = NULL;
     char *new_packet = NULL;
     list_for_each_entry(walk, &instance->iface_list, list) {
-        char *new_packet = (char *)malloc(len * sizeof(char));
-        MALLOC_FAILED(new_packet);
-        memcpy(new_packet, packet, len);
-        forward_lsu(iface, new_packet, len);
-        new_packet = NULL;
+        if (walk != iface) {
+            char *new_packet = (char *)malloc(len * sizeof(char));
+            MALLOC_FAILED(new_packet);
+            memcpy(new_packet, packet, len);
+            forward_lsu(walk, new_packet, len);
+            new_packet = NULL;
+        }
     }
 #ifdef __DEBUG__
     track_function(LEAVE);
