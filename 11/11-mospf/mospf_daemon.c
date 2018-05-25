@@ -503,7 +503,6 @@ static void update_database(iface_info_t *iface, char *packet, int len) {
     u16 seq = ntohs(lsu->seq);
     u32 num_of_nbrs = ntohl(lsu->nadv);
 
-    // update database
 #ifdef __DEBUG_HELPERS__
     inspect_lsu_packet(ip, hdr, lsu, lsa);
 #endif
@@ -524,6 +523,7 @@ static void update_database(iface_info_t *iface, char *packet, int len) {
             db->array = (struct mospf_lsa *)realloc(db->array,
                                                     num_of_nbrs * MOSPF_LSA_SIZE);
         } else {
+            pthread_mutex_unlock(&mospf_lock);
             return ;
         }
     } else {
