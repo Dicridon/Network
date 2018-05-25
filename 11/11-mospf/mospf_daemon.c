@@ -15,13 +15,14 @@
 #include <pthread.h>
 
 // #define __DEBUG__
+// #define __DEBUG_HELPERS__
 
 #ifdef __DEBUG__
 #define ENTER (0)
 #define LEAVE (1)
 #endif
 
-// #define __DEBUG_HELPERS__
+
 #ifdef __DEBUG_HELPERS__
 static void dump_nbrs(iface_info_t *iface) {
     mospf_nbr_t *nbr = NULL;
@@ -230,7 +231,7 @@ static void init_mospf_lsu(char *packet, iface_info_t *iface, int nbrs) {
         (struct mospf_lsu *)(packet + ETHER_HDR_SIZE +
                              IP_BASE_HDR_SIZE + MOSPF_HDR_SIZE);
 
-    lsu->seq = htons(instance->sequence_num);
+    lsu->seq = htons(instance->sequence_num++);
     lsu->ttl = MOSPF_DEFAULT_LSU_TTL;
     lsu->nadv = htonl(nbrs);
 }
@@ -244,6 +245,13 @@ static void init_mospf_lsa(char *packet, iface_info_t *iface) {
     int i = 0;
     list_for_each_entry(walk, &instance->iface_list, list) {
         mospf_nbr_t *nbr = NULL;
+        if (list_empty(&walk->nbr_list)) {
+            lsa[i].mask = htonl(walk->mask);
+            lsa[i].rid = 0;
+            lsa[i].subnet = htonl(walk->ip & walk->mask);
+            i++;
+            continue;
+        }
         list_for_each_entry(nbr, &walk->nbr_list, list) {
             lsa[i].mask = htonl(nbr->nbr_mask);
             lsa[i].rid = htonl(nbr->nbr_id);
@@ -255,15 +263,21 @@ static void init_mospf_lsa(char *packet, iface_info_t *iface) {
 }
 
 static void bcast_mospf_lsu_packet() {
+#ifdef __DEBUG_HELPERS__
+    track_function(ENTER);
+#endif
     int num_of_nbrs = 0;
     iface_info_t *walk = NULL;
     list_for_each_entry(walk, &instance->iface_list, list) {
-        num_of_nbrs += walk->num_nbr;
+        if (list_empty(&walk->nbr_list))
+            num_of_nbrs++;
+        else
+            num_of_nbrs += walk->num_nbr;
     }
     int head_size = ETHER_HDR_SIZE + IP_BASE_HDR_SIZE + MOSPF_HDR_SIZE;
     int message_len = MOSPF_LSU_SIZE + num_of_nbrs * MOSPF_LSA_SIZE;
     int len =  head_size + message_len;
-    
+
     list_for_each_entry(walk, &instance->iface_list, list) {
         mospf_nbr_t *nbr = NULL;
         list_for_each_entry(nbr, &walk->nbr_list, list) {
@@ -282,13 +296,19 @@ static void bcast_mospf_lsu_packet() {
             iface_send_packet(walk, packet, len);
         }
     }
+#ifdef __DEBUG_HELPERS__
+    track_function(LEAVE);
+#endif
 }
 
 static void send_mospf_lsu_packet(iface_info_t *iface) {
     int num_of_nbrs = 0;
     iface_info_t *walk = NULL;
     list_for_each_entry(walk, &instance->iface_list, list) {
-        num_of_nbrs += walk->num_nbr;
+        if (list_empty(&walk->nbr_list))
+            num_of_nbrs++;
+        else
+            num_of_nbrs += walk->num_nbr;
     }
     int head_size = ETHER_HDR_SIZE + IP_BASE_HDR_SIZE + MOSPF_HDR_SIZE;
     int message_len = MOSPF_LSU_SIZE + num_of_nbrs * MOSPF_LSA_SIZE;
@@ -544,8 +564,8 @@ static void forward_lsu(iface_info_t *iface, char *packet, int len) {
 #ifdef __DEBUG_HELPERS__
         inspect_forwarding(ntohl(ip->saddr), ntohl(ip->daddr), nbr->nbr_ip);
 #endif
-        //if (ntohl(ip->saddr) == nbr->nbr_ip)
-        //    continue;
+        /* if (ntohl(ip->saddr) == nbr->nbr_ip) */
+        /*     continue; */
         hdr = (struct mospf_hdr *)((char*)ip + IP_HDR_SIZE(ip));
         ip->daddr = htonl(nbr->nbr_ip);
         ip->checksum = ip_checksum(ip);
@@ -563,16 +583,16 @@ void handle_mospf_lsu(iface_info_t *iface, char *packet, int len)
 #ifdef __DEBUG__
     track_function(ENTER);
 #endif
-    update_database(iface, packet, len);
     struct iphdr *in_ip = packet_to_ip_hdr(packet);
     struct mospf_hdr *hdr =
         (struct mospf_hdr *)((char *)in_ip + IP_HDR_SIZE(in_ip));
     struct mospf_lsu *lsu = (struct mospf_lsu *)((char *)hdr + MOSPF_HDR_SIZE);
-    if (--lsu->ttl <= 0) {
+    if (--lsu->ttl <= 0 || (instance->router_id == ntohl(hdr->rid))) {
         return ;
     } else {
         hdr->checksum = mospf_checksum(hdr);
     }
+    update_database(iface, packet, len);
     iface_info_t *walk = NULL;
     char *new_packet = NULL;
     list_for_each_entry(walk, &instance->iface_list, list) {
