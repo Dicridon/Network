@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <pthread.h>
 
+#define NUM_OF_NODES 4
 #define false 0
 #define true 1
 // #define __DEBUG__
@@ -27,6 +28,22 @@
 #endif
 
 #ifdef __DEBUG_HELPERS__
+static void dump_distance(int *dis, int size) {
+    for (int i = 0; i < size; i++) {
+        fprintf(stdout, "%d ", dis[i]);
+    }
+    fprintf(stdout, "\n");
+}
+
+static void dump_matrix(int **matrix, int size) {
+    for (int i = 0; i < size; i++) {
+        for (int j = 0; j < size; j++) {
+            fprintf(stdout, "%d ", matrix[i][j]);
+        }
+        fprintf(stdout, "\n");
+    }
+}
+
 static void dump_nbrs(iface_info_t *iface) {
     mospf_nbr_t *nbr = NULL;
     fprintf(stdout, "iface " IP_FMT " has following nbrs: \n", LE_IP_FMT_STR(iface->ip));
@@ -36,6 +53,10 @@ static void dump_nbrs(iface_info_t *iface) {
         fprintf(stdout, "nbr_ip: " IP_FMT "\n", LE_IP_FMT_STR(nbr->nbr_ip));
         fprintf(stdout, "nbr_id: " IP_FMT "\n", LE_IP_FMT_STR(nbr->nbr_id));
     }
+}
+
+static void inspect_ip(u32 ip) {
+    fprintf(stdout, IP_FMT "\n", LE_IP_FMT_STR(ip));
 }
 
 static void inspect_forwarding(u32 src, u32 dest, u32 fdest) {
@@ -266,9 +287,6 @@ static void init_mospf_lsa(char *packet, iface_info_t *iface) {
 }
 
 static void bcast_mospf_lsu_packet() {
-#ifdef __DEBUG_HELPERS__
-    track_function(ENTER);
-#endif
     int num_of_nbrs = 0;
     iface_info_t *walk = NULL;
     list_for_each_entry(walk, &instance->iface_list, list) {
@@ -299,9 +317,6 @@ static void bcast_mospf_lsu_packet() {
             iface_send_packet(walk, packet, len);
         }
     }
-#ifdef __DEBUG_HELPERS__
-    track_function(LEAVE);
-#endif
 }
 
 static void send_mospf_lsu_packet(iface_info_t *iface) {
@@ -341,9 +356,6 @@ static void send_mospf_lsu_packet(iface_info_t *iface) {
 
 void *sending_mospf_hello_thread(void *param)
 {
-#ifdef __DEBUG__
-    track_function(ENTER);
-#endif
     while(1) {
         int len =
             ETHER_HDR_SIZE + IP_BASE_HDR_SIZE + MOSPF_HDR_SIZE + MOSPF_HELLO_SIZE;
@@ -358,17 +370,11 @@ void *sending_mospf_hello_thread(void *param)
 
         sleep(MOSPF_DEFAULT_HELLOINT);
     }
-#ifdef __DEBUG__
-    track_function(LEAVE);
-#endif
     return NULL;
 }
 
 void *checking_nbr_thread(void *param)
 {
-#ifdef __DEBUG__
-    track_function(ENTER);
-#endif
     iface_info_t *iface = NULL, *q = NULL, *qq = NULL;
     mospf_nbr_t *nbr = NULL;
     int removed = 0;
@@ -398,9 +404,6 @@ void *checking_nbr_thread(void *param)
     if (removed) {
         bcast_mospf_lsu_packet();
     }
-#ifdef __DEBUG__
-    track_function(LEAVE);
-#endif
     // fprintf(stdout, "DONE: neighbor list timeout operation.\n");
     return NULL;
 }
@@ -408,24 +411,15 @@ void *checking_nbr_thread(void *param)
 
 void handle_mospf_hello(iface_info_t *iface, const char *packet, int len)
 {
-#ifdef __DEBUG__
-    track_function(ENTER);
-#endif
     struct iphdr *ip = packet_to_ip_hdr(packet);
     struct mospf_hdr *hdr =
         (struct mospf_hdr *)(packet + ETHER_HDR_SIZE + IP_HDR_SIZE(ip));
     struct mospf_hello *hello =
         (struct mospf_hello *)((char*)hdr + MOSPF_HDR_SIZE);
     u32 id = ntohl(hdr->rid);
-#ifdef __DEBUG_HELPERS__
-    inspect_hello_packet(ip, hello);
-#endif
     mospf_nbr_t *nbr = NULL;
     list_for_each_entry(nbr, &iface->nbr_list, list) {
         if (nbr->nbr_id == id) {
-#ifdef __DEBUG__
-            track_function(LEAVE);
-#endif
             return;
         }
     }
@@ -439,54 +433,35 @@ void handle_mospf_hello(iface_info_t *iface, const char *packet, int len)
     nbr->nbr_mask = ntohl(hello->mask);
     fprintf(stdout, "iface added " IP_FMT " to its nbr list\n", LE_IP_FMT_STR(nbr->nbr_ip));
     list_add_tail(&nbr->list, &iface->nbr_list);
-#ifdef __DEBUG_HELPERS__
-    dump_nbrs(iface);
-#endif
     pthread_mutex_unlock(&mospf_lock);
     send_mospf_lsu_packet(iface);
-#ifdef __DEBUG__
-    track_function(LEAVE);
-#endif
     // fprintf(stdout, "DONE: handle mOSPF Hello message.\n");
 }
 
 static void dump_database() {
-#ifdef __DEBUG__
-    track_function(ENTER);
-#endif
     mospf_db_entry_t *db = NULL;
+    fprintf(stdout,
+            "------------------------------------------------------------\n");
     list_for_each_entry(db, &mospf_db, list) {
-        fprintf(stdout, "Database entry IP " IP_FMT " \n", LE_IP_FMT_STR(db->rid));
+        fprintf(stdout,
+                "database entry      nbr rid      nbr mask      nbr subnet\n");
         for (int i = 0; i < db->nadv; i++) {
-            fprintf(stdout,
-                    "nbt rid: " IP_FMT " \n",
-                    LE_IP_FMT_STR(db->array[i].rid));
-            fprintf(stdout,
-                    "nbr mask: " IP_FMT " \n",
-                    LE_IP_FMT_STR(db->array[i].mask));
-            fprintf(stdout,
-                    "nbt subnet: " IP_FMT " \n",
-                    LE_IP_FMT_STR(db->array[i].subnet));
+            fprintf(stdout, IP_FMT "   ", LE_IP_FMT_STR(db->rid));
+            fprintf(stdout, IP_FMT "   ", LE_IP_FMT_STR(db->array[i].rid));
+            fprintf(stdout, IP_FMT "   ", LE_IP_FMT_STR(db->array[i].mask));
+            fprintf(stdout, IP_FMT "\n", LE_IP_FMT_STR(db->array[i].subnet));
         }
     }
-    fprintf(stdout, "\n");
-#ifdef __DEBUG__
-    track_function(LEAVE);
-#endif
+    fprintf(stdout,
+            "------------------------------------------------------------\n");
 }
 
 void *sending_mospf_lsu_thread(void *param)
 {
     
     while(1) {
-#ifdef __DEBUG__
-        track_function(ENTER);
-#endif
         bcast_mospf_lsu_packet();
         sleep(MOSPF_DEFAULT_LSUINT);
-#ifdef __DEBUG__
-        track_function(LEAVE);
-#endif
     }
     // fprintf(stdout, "DONE: send mOSPF LSU message periodically.\n");
     return NULL;
@@ -506,9 +481,6 @@ static void update_database(iface_info_t *iface, char *packet, int len) {
     u16 seq = ntohs(lsu->seq);
     u32 num_of_nbrs = ntohl(lsu->nadv);
 
-#ifdef __DEBUG_HELPERS__
-    inspect_lsu_packet(ip, hdr, lsu, lsa);
-#endif
     mospf_db_entry_t *db = NULL;
     int found = 0;
     list_for_each_entry(db, &mospf_db, list) {
@@ -552,9 +524,6 @@ static void update_database(iface_info_t *iface, char *packet, int len) {
 
 
 static void forward_lsu(iface_info_t *iface, char *packet, int len) {
-#ifdef __DEBUG__
-    track_function(ENTER);
-#endif    
     struct iphdr *ip = NULL;
     struct mospf_hdr *hdr = NULL;
     char *pkt = NULL;
@@ -564,9 +533,6 @@ static void forward_lsu(iface_info_t *iface, char *packet, int len) {
         MALLOC_FAILED(pkt);
         memcpy(pkt, packet, len);
         ip = packet_to_ip_hdr(pkt);
-#ifdef __DEBUG_HELPERS__
-        inspect_forwarding(ntohl(ip->saddr), ntohl(ip->daddr), nbr->nbr_ip);
-#endif
         /* if (ntohl(ip->saddr) == nbr->nbr_ip) */
         /*     continue; */
         hdr = (struct mospf_hdr *)((char*)ip + IP_HDR_SIZE(ip));
@@ -576,125 +542,176 @@ static void forward_lsu(iface_info_t *iface, char *packet, int len) {
         ip_send_packet(pkt, len);
         pkt = NULL;
     }
-#ifdef __DEBUG__
-    track_function(LEAVE);
-#endif    
 }
 
 
-static int mark_router_to_host(int *distance){
-    mospf_db_entry_t *db = NULL;
-    int idx = 0;
-    int marked = 0;
-    list_for_each_entry(db, &mospf_db, list) {
-        for (int i = 0; i < db->nadv; i++, idx++) {
-            if (db->array[i].rid == 0) {
-                distance[idx] = 1;
-                marked = 1;
+static inline int rid_to_index(u32 rid) {
+    return rid & 0x000000ff;
+}
+
+static void record_neighbors(int **matrix, int size) {
+    iface_info_t *iface = NULL;
+    list_for_each_entry(iface, &instance->iface_list, list) {
+        mospf_nbr_t *nbr = NULL;
+        list_for_each_entry(nbr, &iface->nbr_list, list) {
+            if (nbr->nbr_id == 0)
+                continue;
+            else {
+                int root_row = rid_to_index(instance->router_id);
+                matrix[root_row][rid_to_index(nbr->nbr_id)] = 1;
             }
         }
     }
-    return marked;
 }
 
-static int rid_to_index(u32 rid) {
-    return rid & 0x000000f;
-}
-
-static int find_nearest_entry(int *visited, int *distance, int num) {
-    int dis = INT32_MAX;
-    int idx = 0;
-    for (int i = 0; i < num; i++) {
-        if (dis > distance[i] && visited[i] == false) {
-            dis = distance[i];
-            idx = i;
-        }
-    }
-    return idx;
-}
-
-static mospf_db_entry_t *index_to_db_entry(int index) {
+static void db_to_matrix(int **matrix, int size) {
+    record_neighbors(matrix, size);   // iface is not in db, add it manually
     mospf_db_entry_t *db = NULL;
     list_for_each_entry(db, &mospf_db, list) {
-        if (rid_to_index(db->rid) == index)
-            return db;
-    }
-}
-
-static void mark_all_nbrs(int nearest, int *visited, int *distance, int num) {
-    int index = 0;
-    mospf_db_entry_t *nr = index_to_db_entry(nearest);
-    for (int i = 0; i < nr->nadv; i++) {
-        index = rid_to_index(nr->array[i].rid);
-        if (visited[i] == false && distance[index] > distance[nearest] + 1 &&
-            distance[nearest] != INT32_MAX) {
-            distance[index] = distance[nearest] + 1;
-        }
-    }
-}
-
-static u32 find_host_subnet() {
-    mospf_db_entry_t *db = NULL;
-    list_for_each_entry(db, &mospf_db, list) {
+        int row = rid_to_index(db->rid);
+        int column = 0;
         for (int i = 0; i < db->nadv; i++) {
             if (db->array[i].rid == 0)
-                return db->array[i].subnet;
+                continue;     // we do not handle host nodes here
+            else {
+                column = rid_to_index(db->array[i].rid);
+                matrix[row][column] = 1;
+            }
         }
     }
 }
 
-static u32 find_host_mask() {
-    mospf_db_entry_t *db = NULL;
-    list_for_each_entry(db, &mospf_db, list) {
-        for (int i = 0; i < db->nadv; i++) {
-            if (db->array[i].rid == 0)
-                return db->array[i].mask;
+static int find_nearest(int *distance, int *visited, int size) {
+    int min = INT32_MAX;
+    int index = 1;
+    for (int i = 1; i < size; i++) {
+        if (min >= distance[i] && visited[i] == false) {
+            min = distance[i];
+            index = i;
+        }
+    }
+    return index;
+}
+
+static void dijkstra(int *visited, int *distance, int *prev,
+                     int **matrix, int size) {
+    // be careful
+    // here we begin with 1 rather than 0;
+    for (int i = 1; i < size; i++) {
+        visited[i] = false;
+        distance[i] = INT32_MAX;
+        prev[i] = -1;
+    }
+    int root_index = rid_to_index(instance->router_id);
+    visited[root_index] = true;
+    for (int j = 1; j < size; j++) {
+            distance[j] = matrix[root_index][j];
+            if (distance[j] != INT32_MAX)
+                prev[j] = root_index;
+    }
+
+    for (int i = 1; i < size-1; i++) {
+        int nearest = find_nearest(distance, visited, size);
+        visited[nearest] = true;
+        for (int j = 1; j < size; j++) {
+            if (visited[j] == false &&
+                matrix[nearest][j] != INT32_MAX &&
+                distance[nearest] + matrix[nearest][j] < distance[j]) {
+                distance[j] = distance[nearest] + matrix[nearest][j];
+                prev[j] = nearest;
+            }
         }
     }
 }
 
-static mospf_nbr_t *find_best_nbr(iface_info_t *iface, int *distance) {
-    mospf_nbr_t *nbr = NULL;
-    mospf_nbr_t *best = NULL;
-    int best_distance = INT32_MAX;
-    list_for_each_entry(nbr, &iface->nbr_list, list) {
-        if (distance[rid_to_index(nbr->nbr_id)] <= best_distance) {
-            best_distance = distance[rid_to_index(nbr->nbr_id)];
-            best = nbr;
+static int find_shortest_path_then_delete(int *distance, int size) {
+    int min = INT32_MAX;
+    int index = 1;
+    for (int i = 1; i < size; i++) {
+        if (min > distance[i]) {
+            min = distance[i];
+            index = i;
         }
     }
-    return best;
+    distance[index] = INT32_MAX;
+    return index;
 }
 
-static void add_new_entry(mospf_nbr_t *best, iface_info_t *iface) {
-    rt_entry_t *old_entry = longest_prefix_match(find_host_subnet());
-     if(old_entry != NULL) {
-        return;
+static mospf_db_entry_t * index_to_dbentry(int index) {
+    mospf_db_entry_t *walk = NULL;
+    list_for_each_entry(walk, &mospf_db, list) {
+        if (rid_to_index(walk->rid) == index) {
+            return walk;
+        }
     }
-        
-    rt_entry_t *new_entry = (rt_entry_t *)malloc(sizeof(rt_entry_t));
-    MALLOC_FAILED(new_entry);
-    new_entry->dest = find_host_subnet();
-    new_entry->mask = find_host_mask();
-    new_entry->gw = best->nbr_ip;
-    strcpy(new_entry->if_name, iface->name);
-    new_entry->flags = 0;
-    add_rt_entry(new_entry);
+    return walk;
+}
+
+static void index_to_iface_and_nbr(int index, iface_info_t **iface,
+                                   mospf_nbr_t **nbr) {
+    iface_info_t *walk = NULL;
+    list_for_each_entry(walk, &instance->iface_list, list) {
+        mospf_nbr_t *nb = NULL;
+        list_for_each_entry(nb, &walk->nbr_list, list) {
+            if (rid_to_index(nb->nbr_id) == index) {
+                *iface = walk;
+                *nbr = nb;
+                return;
+            }
+        }
+    }
+}
+
+static void expand_rtable(int *distance, int *prev, int size) {
+    int root = rid_to_index(instance->router_id);
+    for (int i = 1; i < size; i++) {
+        int index = find_shortest_path_then_delete(distance, size);
+        if (index == root)
+            continue;
+        else {
+            mospf_db_entry_t *db = NULL;
+            db = index_to_dbentry(index);
+            for (int j = 0; j < db->nadv; j++) {
+                if (longest_prefix_match(db->array[j].subnet) != NULL)
+                    continue;
+                else {
+                    u32 dest = db->array[j].subnet;
+                    int hop = rid_to_index(db->rid);
+                    while(prev[hop] != root) {
+                        hop = prev[hop];
+                    }
+                    iface_info_t *iface = NULL;
+                    mospf_nbr_t *nbr = NULL;
+                    index_to_iface_and_nbr(hop, &iface, &nbr);
+                    u32 gw = nbr->nbr_ip;
+                    rt_entry_t *rt = (rt_entry_t *)malloc(sizeof(rt_entry_t));
+                    MALLOC_FAILED(rt);
+                    rt->dest = dest;
+                    rt->flags = 0;
+                    rt->gw = gw;
+                    strcpy(rt->if_name, iface->name);
+                    rt->mask = nbr->nbr_mask;
+                    rt->iface = iface;
+                    add_rt_entry(rt);
+                }
+            }
+        }
+    }
 }
 
 void update_rtable(iface_info_t *iface){
-    if (list_empty(&mospf_db))
-        return;
-    
     pthread_mutex_lock(&mospf_lock);
     int num_of_entries = 0;
-    int router_to_host = -1;
-    int index = 0;
     mospf_db_entry_t *dbe = NULL;
     list_for_each_entry(dbe, &mospf_db, list) {
         num_of_entries++;
     }
-    num_of_entries++;
+    if (num_of_entries != 3) {
+        pthread_mutex_unlock(&mospf_lock);
+        return;        
+    }
+
+    num_of_entries += 2;    // one for instance itself, one for extra space
     
     int *visited = (int *)malloc(num_of_entries * sizeof(int));
     MALLOC_FAILED(visited);
@@ -702,49 +719,35 @@ void update_rtable(iface_info_t *iface){
     MALLOC_FAILED(distance);
     int *prev = (int *)malloc(num_of_entries * sizeof(int));
     MALLOC_FAILED(prev);
+
+    // initialize a matrix
+    int **matrix = (int **)malloc(num_of_entries * (sizeof(int *)));
+    MALLOC_FAILED(matrix);
     for (int i = 0; i < num_of_entries; i++) {
-        visited[i] = false;
-        distance[i] = INT32_MAX;
-        prev[i] = -1;
+        matrix[i] = (int *)malloc(num_of_entries * sizeof(int));
+        MALLOC_FAILED(matrix[i]);
     }
-    
-    if (!mark_router_to_host(distance)) {
-        fprintf(stdout, "Host is not detected yet\n");
-        free(visited);
-        free(distance);
-        pthread_mutex_unlock(&mospf_lock);
-        return;
+    for (int i = 0; i < num_of_entries; i++) {
+        for (int j = 0; j < num_of_entries; j++) {
+            matrix[i][j] = (i == j) ? 0 : INT32_MAX;
+        }
     }
+    db_to_matrix(matrix, num_of_entries);
+    dijkstra(visited, distance, prev, matrix, num_of_entries);
+    expand_rtable(distance, prev, num_of_entries);
 
-    // find the shortest path from dest to source
-    for (int i = 0; i < num_of_entries-2; i++) {
-        int nearest = find_nearest_entry(visited, distance, num_of_entries);
-        visited[nearest] = true;
-        mark_all_nbrs(nearest, visited, distance, num_of_entries);
-    }
-
-    // find the nearest nbr
-    mospf_nbr_t *best = find_best_nbr(iface, distance);
-    if (best == NULL) {
-        free(visited);
-        free(distance);
-        pthread_mutex_unlock(&mospf_lock);
-        return;           // nbrs are not detected yet
-    }
-    // add new rtable ENTRIES(notice that more than one entry might be added)
-    // to rtable
-    add_new_entry(best, iface);
-    print_rtable();
     free(visited);
     free(distance);
+    free(prev);
+    for (int i = 0; i < num_of_entries; i++) {
+        free(matrix[i]);
+    }
+    free(matrix);
     pthread_mutex_unlock(&mospf_lock);
 }
 
 void handle_mospf_lsu(iface_info_t *iface, char *packet, int len)
 {
-#ifdef __DEBUG__
-    track_function(ENTER);
-#endif
     struct iphdr *in_ip = packet_to_ip_hdr(packet);
     struct mospf_hdr *hdr =
         (struct mospf_hdr *)((char *)in_ip + IP_HDR_SIZE(in_ip));
@@ -756,7 +759,6 @@ void handle_mospf_lsu(iface_info_t *iface, char *packet, int len)
     }
     update_database(iface, packet, len);
     iface_info_t *walk = NULL;
-    char *new_packet = NULL;
     list_for_each_entry(walk, &instance->iface_list, list) {
         if (walk != iface) {
             char *new_packet = (char *)malloc(len * sizeof(char));
@@ -766,10 +768,14 @@ void handle_mospf_lsu(iface_info_t *iface, char *packet, int len)
             new_packet = NULL;
         }
     }
-    update_rtable(iface);
-#ifdef __DEBUG__
-    track_function(LEAVE);
-#endif
+    int num_of_entries = 0;
+    mospf_db_entry_t *dbe = NULL;
+    list_for_each_entry(dbe, &mospf_db, list) {
+        num_of_entries++;
+    }
+    if (num_of_entries == 3)
+        update_rtable(iface);
+    print_rtable();
     // fprintf(stdout, "DONE: handle mOSPF LSU message.\n");
 }
 
