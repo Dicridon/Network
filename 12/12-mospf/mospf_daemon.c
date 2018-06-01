@@ -1,3 +1,7 @@
+/*******************************************************************
+ *   This file is deprecated, check branch ping_work, which works
+ *   correctly.
+ ******************************************************************/
 #include "include/mospf_daemon.h"
 #include "include/mospf_proto.h"
 #include "include/mospf_nbr.h"
