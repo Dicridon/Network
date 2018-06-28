@@ -9,7 +9,7 @@
 
 struct ring_buffer {
     pthread_mutex_t ring_lock;
-    pthread_cond_t block_read_cond;
+//     pthread_cond_t block_read_cond;
     int size;
     int head;		// read from head
     int tail;		// write from tail
@@ -24,7 +24,7 @@ static inline struct ring_buffer *alloc_ring_buffer(int size)
     memset(rbuf, 0, tot_size);
     rbuf->size = size;
     pthread_mutex_init(&rbuf->ring_lock, NULL);
-    pthread_cond_init(&rbuf->block_read_cond, NULL);
+    //   pthread_cond_init(&rbuf->block_read_cond, NULL);
     return rbuf;
 }
 

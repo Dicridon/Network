@@ -392,8 +392,11 @@ int tcp_sock_read(struct tcp_sock *tsk, char *buf, int len) {
     if (ring_buffer_empty(tsk->rcv_buf)) {
         fprintf(stdout,
                 "tcp_sock_read: ring buffer is empty, waiting for data\n");
-        pthread_cond_wait(&tsk->rcv_buf->block_read_cond,
-                          &tsk->rcv_buf->ring_lock);
+        // pthread_cond_wait(&tsk->rcv_buf->block_read_cond,
+        //                 &tsk->rcv_buf->ring_lock);
+        fprintf(stdout, "%s: tsk %p sleeps on wait_recv\n", __FUNCTION__, tsk);
+        pthread_mutex_unlock(&tsk->rcv_buf->ring_lock);
+        sleep_on(tsk->wait_recv);
     }
         
     int nused = ring_buffer_free(tsk->rcv_buf);
@@ -427,13 +430,17 @@ int tcp_send_data(struct tcp_sock *tsk, char *buf, int len) {
 }
 
 int tcp_sock_write(struct tcp_sock *tsk, char *buf, int len) {
-    if (tsk->snd_wnd == 0)
+    if (tsk->snd_wnd == 0) {
+        fprintf(stdout, "send window is 0\n");
         sleep_on(tsk->wait_send);
+    }
+        
+        
     if (len <= 0 || !buf) {
         fprintf(stdout, "null buf, data length zero or negative!\n");
         return -1;
     }
-    fprintf(stdout, "%s: sending data to server\n", __FUNCTION__);
+    fprintf(stdout, "%s: sending data\n", __FUNCTION__);
     return tcp_send_data(tsk, buf, len);
  }
 

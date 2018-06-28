@@ -87,6 +87,7 @@ void tcp_state_syn_sent(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 
     tcp_send_control_packet(tsk, TCP_ACK);
     tcp_set_state(tsk, TCP_ESTABLISHED);
+    tsk->snd_wnd = cb->rwnd;
     wake_up(tsk->wait_connect);
     // fprintf(stdout, "DONE: implement this function please.\n");
 }
@@ -125,6 +126,7 @@ void tcp_state_syn_recv(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
     tsk->snd_nxt = cb->ack;
     
     tcp_set_state(tsk, TCP_ESTABLISHED);
+    tsk->snd_wnd = cb->rwnd;
     list_delete_entry(&tsk->list);
     tcp_sock_accept_enqueue(tsk);
     wake_up(tsk->parent->wait_accept);
@@ -183,10 +185,14 @@ void tcp_recv_data(struct tcp_sock *tsk, struct tcp_cb *cb) {
     else {
         tsk->rcv_wnd = free_size - cb->pl_len;
         tsk->rcv_nxt = cb->seq + 1;
+        fprintf(stdout,
+                "%s, %d: writing to ring buffer finished\n",
+                __FUNCTION__, __LINE__);
         write_ring_buffer(tsk->rcv_buf, cb->payload, cb->pl_len);
-        fprintf(stdout, "%s: writing to ring buffer finished\n", __FUNCTION__);
 
-        pthread_cond_signal(&tsk->rcv_buf->block_read_cond);
+        // pthread_cond_signal(&tsk->rcv_buf->block_read_cond);
+        fprintf(stdout, "%s, %d: wake up %p\n", __FUNCTION__, __LINE__, tsk);
+        wake_up(tsk->wait_recv);
         pthread_mutex_unlock(&tsk->rcv_buf->ring_lock);
     }
 }
@@ -258,7 +264,6 @@ void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
     } else if (tsk->state == TCP_ESTABLISHED) {
         fprintf(stdout, "**** update window\n");
         tcp_update_window_safe(tsk, cb);
-        tsk->rcv_nxt += 1;
     } else if ((cb->flags & TCP_FIN) == 0) {
         switch(tsk->state){
         case TCP_FIN_WAIT_1:
