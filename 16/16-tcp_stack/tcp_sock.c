@@ -427,6 +427,8 @@ int tcp_send_data(struct tcp_sock *tsk, char *buf, int len) {
 }
 
 int tcp_sock_write(struct tcp_sock *tsk, char *buf, int len) {
+    if (tsk->snd_wnd == 0)
+        sleep_on(tsk->wait_send);
     if (len <= 0 || !buf) {
         fprintf(stdout, "null buf, data length zero or negative!\n");
         return -1;
