@@ -184,7 +184,7 @@ void tcp_recv_data(struct tcp_sock *tsk, struct tcp_cb *cb) {
  
     else {
         tsk->rcv_wnd = free_size - cb->pl_len;
-        tsk->rcv_nxt = cb->seq + 1;
+        tsk->rcv_nxt = cb->seq + cb->pl_len;
         fprintf(stdout,
                 "%s, %d: writing to ring buffer finished\n",
                 __FUNCTION__, __LINE__);
